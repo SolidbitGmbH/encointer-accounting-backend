@@ -54,12 +54,12 @@ async function main() {
                 return;
             }
             const now = new Date();
-            const year = now.getUTCFullYear();
-            const month = now.getUTCMonth();
+            const year = 2022
+            const month = 11
             const cached_data = getFromCache(account, year, month);
 
             const data = [];
-            for (let i = 0; i < month; i++) {
+            for (let i = 4; i < month; i++) {
                 if (cached_data[i]) {
                     data.push(cached_data[i]);
                 } else {

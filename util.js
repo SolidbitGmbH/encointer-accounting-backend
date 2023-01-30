@@ -4,6 +4,13 @@ import { gatherTransactionData, generateTxnLog } from "./graphQl.js";
 
 const LAST_BLOCK_OF_MONTH_CACHE = {};
 
+const cids = ["u0qj944rhWE", "u0qj9QqA2Q", "u0qj92QX9PQ"];
+const cidsDecoded = [
+    { geohash: "u0qj9", digest: "0x36fc80f3" },
+    { geohash: "u0qj9", digest: "0x1012ea85" },
+    { geohash: "u0qj9", digest: "0x77f79df7" },
+];
+
 async function getBlockTimestamp(api, blockNumber) {
     const blockHash = await api.rpc.chain.getBlockHash(blockNumber);
     return api.query.timestamp.now.at(blockHash);
@@ -54,39 +61,44 @@ function getFirstTimeStampOfMonth(year, monthIndex) {
 }
 
 export async function getLastBlockOfMonth(api, year, monthIndex) {
-    if (
-        year in LAST_BLOCK_OF_MONTH_CACHE &&
-        monthIndex in LAST_BLOCK_OF_MONTH_CACHE[year]
-    )
-        return LAST_BLOCK_OF_MONTH_CACHE[year][monthIndex];
-    const lastTimestamp = getLastTimeStampOfMonth(year, monthIndex);
-    if (new Date() < new Date(lastTimestamp)) {
-        // we are not at the end of the month yet, so we return the current blocknumber
-        return (await api.rpc.chain.getBlock()).block.header.number;
-    }
-    const blockNumber = await getBlockNumber(api, lastTimestamp);
-
-    if (!(year in LAST_BLOCK_OF_MONTH_CACHE))
-        LAST_BLOCK_OF_MONTH_CACHE[year] = {};
-    LAST_BLOCK_OF_MONTH_CACHE[year][monthIndex] = blockNumber;
-    return blockNumber;
+    const lastBlocksOfMonth2022 = [
+        156172, 293070, 405492, 518227, 682654, 842429, 996273, 1164725, 1364285,
+        1580906, 1791306, 1972772,
+    ];
+    return lastBlocksOfMonth2022[monthIndex]
 }
 
 export function applyDemurrage(principal, elapsedBlocks, demurragePerBlock) {
     return principal * Math.exp(-demurragePerBlock * elapsedBlocks);
 }
 
-async function getDemurrageAdjustedBalance(api, address, cid, blockNumber) {
+async function getDemurrageAdjustedBalance(api, address, blockNumber) {
     const blockHash = await api.rpc.chain.getBlockHash(blockNumber);
-    const cidDecoded = CIDS[cid];
-    let balanceEntry = await getBalance(api, cidDecoded, address, blockHash);
+    let cidBalanceEntry = (
+        await Promise.all(
+            cidsDecoded.map(async (cid) => [
+                cid,
+                await getBalance(api, cid, address, blockHash),
+            ])
+        )
+    ).filter((e) => e[1].principal > 0)[0];
 
-    const demurragePerBlock = await getDemurragePerBlock(api, cidDecoded, blockHash);
-    const balance = applyDemurrage(
-        balanceEntry.principal,
-        blockNumber - balanceEntry.lastUpdate,
-        demurragePerBlock
-    );
+    let balance = 0;
+    if (cidBalanceEntry) {
+        const cid = cidBalanceEntry[0];
+        const balanceEntry = cidBalanceEntry[1];
+
+        const demurragePerBlock = await getDemurragePerBlock(
+            api,
+            cid,
+            blockHash
+        );
+        balance = applyDemurrage(
+            balanceEntry.principal,
+            blockNumber - balanceEntry.lastUpdate,
+            demurragePerBlock
+        );
+    }
     return balance;
 }
 
@@ -122,13 +134,11 @@ export async function getAccountingData(api, account, cid, year, month) {
     const balance = await getDemurrageAdjustedBalance(
         api,
         account,
-        cid,
         lastBlockOfMonth
     );
     const previousBalance = await getDemurrageAdjustedBalance(
         api,
         account,
-        cid,
         lastBlockOfPreviousMonth
     );
 
