@@ -5,8 +5,7 @@ const INCOMING = 2;
 const OUTGOING = 1;
 
 // ausgleichstransaktionen bei cid wechsel müssen ignoriert werden
-const excludeEvents = ["1064499-1161", "820314-1", "819843-1", "1064499-275"];
-
+const excludeEvents = ["1064499-1161", "820314-1", "819843-1", "1064499-275", '1064499-670', '820065-1'];
 
 async function graphQlQuery(query, variables) {
     let res = await fetch(INDEXER_ENDPOINT, {
@@ -61,6 +60,7 @@ async function getIssues(start, end, address) {
 export async function gatherTransactionData(start, end, address, cid) {
     let incoming = (await getTransfers(start, end, address, INCOMING))
         .transferreds.nodes;
+    console.log(incoming)
     const outgoing = (await getTransfers(start, end, address, OUTGOING))
         .transferreds.nodes;
 
@@ -68,6 +68,27 @@ export async function gatherTransactionData(start, end, address, cid) {
     incoming = incoming.filter((e) => !excludeEvents.includes(e.id));
 
     const issues = (await getIssues(start, end, address)).issueds.nodes;
+    console.log(start);
+    console.log(issues);
+    // manually add the issuance transactions
+    if (start === 1656633600000) {
+        issues.push({
+            id: "958447-2",
+            blockHeight: "958447",
+            timestamp: "1658647776396",
+            arg0: "u0qj944rhWE",
+            arg1: "DYV4wcmBUAM3d5qw2svQM7CC5Y5MSR4ED9Zo5JjBP1kGBg5",
+            arg2: 22,
+        });
+        issues.push({
+            id: "907999-2",
+            blockHeight: "907999",
+            timestamp: "1657775802631",
+            arg0: "u0qj944rhWE",
+            arg1: "DYV4wcmBUAM3d5qw2svQM7CC5Y5MSR4ED9Zo5JjBP1kGBg5",
+            arg2: 22,
+        });
+    }
 
     const sumIssues = issues.reduce((acc, cur) => acc + cur.arg2, 0);
 
@@ -75,8 +96,15 @@ export async function gatherTransactionData(start, end, address, cid) {
     const sumOutgoing = outgoing.reduce((acc, cur) => acc + cur.arg3, 0);
     const incomeMinusExpenses = sumIncoming - sumOutgoing;
 
-    const numDistinctClients = new Set(incoming.map(e => e.arg1)).size
-    return [incoming, outgoing, issues, incomeMinusExpenses, sumIssues, numDistinctClients];
+    const numDistinctClients = new Set(incoming.map((e) => e.arg1)).size;
+    return [
+        incoming,
+        outgoing,
+        issues,
+        incomeMinusExpenses,
+        sumIssues,
+        numDistinctClients,
+    ];
 }
 
 export function generateTxnLog(incoming, outgoing, issues) {
