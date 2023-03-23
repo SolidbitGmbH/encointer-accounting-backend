@@ -1,5 +1,11 @@
 import { INDEXER_ENDPOINT } from "./consts.js";
 import fetch from "node-fetch";
+import {
+    getRandomIncoming,
+    getRandomIssueds,
+    getRandomOutgoing,
+} from "./mock.js";
+import { getRandomInt } from "./util.js";
 
 const INCOMING = 2;
 const OUTGOING = 1;
@@ -110,13 +116,26 @@ export async function getAllPages(query, variables) {
 }
 
 export async function gatherTransactionData(start, end, address, cid) {
-    let incoming = await getTransfers(start, end, address, cid, INCOMING);
-    const outgoing = await getTransfers(start, end, address, cid, OUTGOING);
+    let incoming, outgoing, issues;
+    if (address === "Cma92HccjSgKVfHuBF1bEULoAfEQrg7bKYC3nn1zf2EYfee") {
+        incoming = Array(getRandomInt(20, 60))
+            .fill(0)
+            .map((e) => (() => getRandomIncoming(address, cid, start, end))());
+        outgoing = Array(getRandomInt(2, 10))
+            .fill(0)
+            .map((e) => (() => getRandomOutgoing(address, cid, start, end))());
+        issues = Array(getRandomInt(0, 3))
+            .fill(0)
+            .map((e) => (() => getRandomIssueds(address, cid, start, end))());
+    } else {
+        incoming = await getTransfers(start, end, address, cid, INCOMING);
+        outgoing = await getTransfers(start, end, address, cid, OUTGOING);
 
-    // hack to exclude cid fuckup transactions
-    // incoming = incoming.filter((e) => !excludeEvents.includes(e.id));
+        // hack to exclude cid fuckup transactions
+        // incoming = incoming.filter((e) => !excludeEvents.includes(e.id));
 
-    const issues = await getIssues(start, end, address, cid);
+        issues = await getIssues(start, end, address, cid);
+    }
 
     const sumIssues = issues.reduce((acc, cur) => acc + cur.arg2, 0);
     const sumIncoming = incoming.reduce((acc, cur) => acc + cur.arg3, 0);

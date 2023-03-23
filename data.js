@@ -5,14 +5,16 @@ import {
     getRewardsIssueds,
     getBlockNumberByTimestamp,
 } from "./graphQl.js";
-import { getMonthName, parseCid } from "./util.js";
+import { getMonthName, getRandomInt, parseCid } from "./util.js";
 
 export async function gatherAccountingOverview(api, account, cid, year, month) {
     const cachedData = await db.getFromAccountDataCache(account, year, cid);
     const data = [];
-    for (let i = 0; i < month; i++) {
+    let previousBalanceMock = 1000;
+    for (let i = 0; i < month + 1; i++) {
         const cachedMonthItem = cachedData?.filter((e) => e.month === i)?.[0];
         if (cachedMonthItem) {
+            previousBalanceMock = cachedMonthItem.balance;
             data.push(cachedMonthItem);
         } else {
             const accountingData = await getAccountingData(
@@ -20,9 +22,12 @@ export async function gatherAccountingOverview(api, account, cid, year, month) {
                 account,
                 cid,
                 year,
-                i
+                i,
+                previousBalanceMock
             );
+            previousBalanceMock = accountingData.balance;
             data.push(accountingData);
+
             db.insertIntoAccountDataCache(
                 account,
                 year,
@@ -32,7 +37,7 @@ export async function gatherAccountingOverview(api, account, cid, year, month) {
             );
         }
     }
-    data.push(await getAccountingData(api, account, cid, year, month));
+    //data.push(await getAccountingData(api, account, cid, year, month, previousBalanceMock));
     return data;
 }
 
@@ -97,7 +102,14 @@ async function getDemurrageAdjustedBalance(api, address, cid, blockNumber) {
     return balance;
 }
 
-export async function getAccountingData(api, account, cid, year, month) {
+export async function getAccountingData(
+    api,
+    account,
+    cid,
+    year,
+    month,
+    previousBalanceMock
+) {
     const start = getFirstTimeStampOfMonth(year, month);
     const end = getLastTimeStampOfMonth(year, month);
     const lastBlockOfMonth = await getLastBlockOfMonth(api, year, month);
@@ -120,18 +132,25 @@ export async function getAccountingData(api, account, cid, year, month) {
     const txnLog = generateTxnLog(incoming, outgoing, issues);
     const dailyDigest = generateDailyDigestFromTxnLog(txnLog);
 
-    const balance = await getDemurrageAdjustedBalance(
-        api,
-        account,
-        cid,
-        lastBlockOfMonth
-    );
-    const previousBalance = await getDemurrageAdjustedBalance(
-        api,
-        account,
-        cid,
-        lastBlockOfPreviousMonth
-    );
+    let balance, previousBalance;
+    if (account === "Cma92HccjSgKVfHuBF1bEULoAfEQrg7bKYC3nn1zf2EYfee") {
+        previousBalance = previousBalanceMock;
+        balance =
+            previousBalance + (sumIncoming + sumIssues - sumOutgoing) * 0.95;
+    } else {
+        balance = await getDemurrageAdjustedBalance(
+            api,
+            account,
+            cid,
+            lastBlockOfMonth
+        );
+        previousBalance = await getDemurrageAdjustedBalance(
+            api,
+            account,
+            cid,
+            lastBlockOfPreviousMonth
+        );
+    }
 
     return {
         month,
@@ -166,19 +185,25 @@ export async function getSelectedRangeData(api, account, cid, start, end) {
     const txnLog = generateTxnLog(incoming, outgoing, issues);
     const dailyDigest = generateDailyDigestFromTxnLog(txnLog);
 
-    const startBalance = await getDemurrageAdjustedBalance(
-        api,
-        account,
-        cid,
-        await getBlockNumberByTimestamp(start)
-    );
+    let startBalance, endBalance;
+    if (account === "Cma92HccjSgKVfHuBF1bEULoAfEQrg7bKYC3nn1zf2EYfee") {
+        startBalance = getRandomInt(900, 1400);
+        endBalance = startBalance + (sumIncoming + sumIssues - sumOutgoing) * 0.95
+    } else {
+        startBalance = await getDemurrageAdjustedBalance(
+            api,
+            account,
+            cid,
+            await getBlockNumberByTimestamp(start)
+        );
 
-    const endBalance = await getDemurrageAdjustedBalance(
-        api,
-        account,
-        cid,
-        await getBlockNumberByTimestamp(end)
-    );
+        endBalance = await getDemurrageAdjustedBalance(
+            api,
+            account,
+            cid,
+            await getBlockNumberByTimestamp(end)
+        );
+    }
 
     return {
         dailyDigest,

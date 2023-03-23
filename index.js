@@ -69,18 +69,19 @@ async function main() {
     var whitelist = [
         "http://localhost:3000",
         "https://accounting.encointer.org",
+        "http://accounting.encointer.org",
     ];
     var corsOptions = {};
 
     var corsOptions = {
         credentials: true,
         origin: function (origin, callback) {
-            callback(null, true);
-            // if (whitelist.indexOf(origin) !== -1) {
-            //     callback(null, true);
-            // } else {
-            //     callback(new Error("Not allowed by CORS"));
-            // }
+            //callback(null, true);
+            if (whitelist.indexOf(origin) !== -1) {
+                callback(null, true);
+            } else {
+                callback(new Error("Not allowed by CORS"));
+            }
         },
         optionsSuccessStatus: 200, // some legacy browsers (IE11, various SmartTVs) choke on 204
     };
